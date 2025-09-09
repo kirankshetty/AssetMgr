@@ -14,9 +14,7 @@ import ExportButton from './ui/export-button';
 import { toast } from 'sonner';
 import { 
   Plus, 
-  Search, 
   ClipboardList,
-  Filter,
   Clock,
   CheckCircle,
   XCircle,
@@ -27,6 +25,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../App';
 import { useRole } from '../contexts/RoleContext';
+import TableHeaderSortable from './ui/table-header-sortable';
+import AdvancedFilters from './ui/advanced-filters';
+import EnhancedPagination from './ui/enhanced-pagination';
+import useTableControls from '../hooks/useTableControls';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -196,35 +198,103 @@ const AssetRequisitions = () => {
     }
   };
 
-  // Filter asset requisitions based on search term and filters
-  const filteredAssetRequisitions = assetRequisitions.filter(requisition => {
-    const matchesSearch = 
-      requisition.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      requisition.asset_type_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      requisition.requested_for_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      requisition.requested_by_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || requisition.status === statusFilter;
-    const matchesType = typeFilter === 'all' || requisition.asset_type_id === typeFilter;
-    
-    return matchesSearch && matchesStatus && matchesType;
+  // Enhanced table controls
+  const tableControls = useTableControls(assetRequisitions, {
+    initialItemsPerPage: 10,
+    searchFields: ['id', 'asset_type_name', 'requested_for_name', 'requested_by_name'],
+    sortableFields: {
+      id: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      asset_type_name: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      request_type: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      status: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      created_at: { sortFn: (a, b, direction) => {
+        const dateA = new Date(a);
+        const dateB = new Date(b);
+        return direction === 'asc' ? dateA - dateB : dateB - dateA;
+      }},
+      required_by_date: { sortFn: (a, b, direction) => {
+        const dateA = new Date(a);
+        const dateB = new Date(b);
+        return direction === 'asc' ? dateA - dateB : dateB - dateA;
+      }}
+    }
   });
 
-  // Pagination logic
-  const totalItems = filteredAssetRequisitions.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedAssetRequisitions = filteredAssetRequisitions.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  // Reset to page 1 when filters change
+  // Update filters from legacy state to new format
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, typeFilter]);
+    const newFilters = {};
+    if (statusFilter && statusFilter !== 'all') {
+      newFilters.status = statusFilter;
+    }
+    if (typeFilter && typeFilter !== 'all') {
+      newFilters.asset_type_id = typeFilter;
+    }
+    
+    // Update table controls filters
+    Object.keys(newFilters).forEach(key => {
+      if (tableControls.filters[key] !== newFilters[key]) {
+        tableControls.handleFilterChange(key, newFilters[key]);
+      }
+    });
+  }, [statusFilter, typeFilter]);
+
+  // Sync legacy search with new controls
+  useEffect(() => {
+    if (tableControls.searchTerm !== searchTerm) {
+      tableControls.handleSearchChange(searchTerm);
+    }
+  }, [searchTerm]);
+
+  // Define filters for the advanced filter component
+  const filters = [
+    {
+      key: 'asset_type_id',
+      label: 'Asset Type',
+      placeholder: 'Filter by type',
+      width: 'w-[180px]',
+      value: typeFilter,
+      defaultValue: 'all',
+      options: [
+        { value: 'all', label: 'All Types' },
+        ...assetTypes.map(type => ({
+          value: type.id,
+          label: type.name
+        }))
+      ]
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'Filter by status',
+      width: 'w-[200px]',
+      value: statusFilter,
+      defaultValue: 'all',
+      options: [
+        { value: 'all', label: 'All Status' },
+        { value: 'Pending', label: 'Pending' },
+        { value: 'Manager Approved', label: 'Manager Approved' },
+        { value: 'HR Approved', label: 'HR Approved' },
+        { value: 'Rejected', label: 'Rejected' },
+        { value: 'Assigned for Allocation', label: 'Assigned for Allocation' },
+        { value: 'Allocated', label: 'Allocated' }
+      ]
+    }
+  ];
+
+  const dateFilters = [
+    {
+      key: 'created_at',
+      label: 'Request Date From',
+      placeholder: 'From date',
+      value: tableControls.dateFilters.created_at || ''
+    },
+    {
+      key: 'required_by_date',
+      label: 'Required Date From',
+      placeholder: 'Required from',
+      value: tableControls.dateFilters.required_by_date || ''
+    }
+  ];
 
   const getStatusIcon = (status) => {
     switch (status) {
@@ -284,7 +354,7 @@ const AssetRequisitions = () => {
         
         <div className="flex items-center gap-2">
           <ExportButton 
-            data={filteredAssetRequisitions}
+            data={tableControls.filteredData}
             type="assetRequisitions"
             disabled={loading}
           />
@@ -312,60 +382,37 @@ const AssetRequisitions = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col lg:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search requisitions..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Filter by type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  {assetTypes.map(type => (
-                    <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Manager Approved">Manager Approved</SelectItem>
-                  <SelectItem value="HR Approved">HR Approved</SelectItem>
-                  <SelectItem value="Rejected">Rejected</SelectItem>
-                  <SelectItem value="Assigned for Allocation">Assigned for Allocation</SelectItem>
-                  <SelectItem value="Allocated">Allocated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Enhanced Filters */}
+      <AdvancedFilters
+        searchTerm={searchTerm}
+        onSearchChange={setSearchTerm}
+        filters={filters}
+        onFilterChange={(key, value) => {
+          if (key === 'status') setStatusFilter(value);
+          if (key === 'asset_type_id') setTypeFilter(value);
+        }}
+        dateFilters={dateFilters}
+        onDateFilterChange={tableControls.handleDateFilterChange}
+        onClearFilters={() => {
+          setSearchTerm('');
+          setStatusFilter('all');
+          setTypeFilter('all');
+          tableControls.clearFilters();
+        }}
+        activeFiltersCount={
+          (statusFilter !== 'all' ? 1 : 0) + 
+          (typeFilter !== 'all' ? 1 : 0) + 
+          Object.values(tableControls.dateFilters).filter(v => v).length
+        }
+      />
 
       {/* Asset Requisitions Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Asset Requisitions ({filteredAssetRequisitions.length})</CardTitle>
+          <CardTitle>Asset Requisitions ({tableControls.totalItems})</CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredAssetRequisitions.length === 0 ? (
+          {tableControls.totalItems === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <ClipboardList className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-semibold text-gray-900">No requisitions found</h3>
@@ -382,20 +429,56 @@ const AssetRequisitions = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Requisition ID</TableHead>
-                      <TableHead>Asset Type</TableHead>
-                      <TableHead>Request Type</TableHead>
+                      <TableHeaderSortable
+                        sortKey="id"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Requisition ID
+                      </TableHeaderSortable>
+                      <TableHeaderSortable
+                        sortKey="asset_type_name"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Asset Type
+                      </TableHeaderSortable>
+                      <TableHeaderSortable
+                        sortKey="request_type"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Request Type
+                      </TableHeaderSortable>
                       <TableHead>Request For</TableHead>
                       <TableHead>Requested By</TableHead>
-                      <TableHead>Required By</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHeaderSortable
+                        sortKey="required_by_date"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Required By
+                      </TableHeaderSortable>
+                      <TableHeaderSortable
+                        sortKey="status"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Status
+                      </TableHeaderSortable>
                       <TableHead>Assigned To</TableHead>
-                      <TableHead>Request Date</TableHead>
+                      <TableHeaderSortable
+                        sortKey="created_at"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Request Date
+                      </TableHeaderSortable>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedAssetRequisitions.map((requisition) => (
+                    {tableControls.data.map((requisition) => (
                       <TableRow key={requisition.id}>
                         <TableCell className="font-medium">{requisition.id}</TableCell>
                         <TableCell>
@@ -427,20 +510,8 @@ const AssetRequisitions = () => {
                         </TableCell>
                         <TableCell>
                           {requisition.assigned_to_name ? (
-                            <div className="space-y-1">
-                              <div className="font-medium text-sm">
-                                {requisition.assigned_to_name}
-                              </div>
-                              {requisition.routing_reason && (
-                                <div className="text-xs text-gray-500">
-                                  {requisition.routing_reason}
-                                </div>
-                              )}
-                              {requisition.assigned_date && (
-                                <div className="text-xs text-gray-400">
-                                  {new Date(requisition.assigned_date).toLocaleDateString()}
-                                </div>
-                              )}
+                            <div className="font-medium text-sm">
+                              {requisition.assigned_to_name}
                             </div>
                           ) : (
                             <span className="text-gray-400 text-sm">Not assigned</span>
@@ -495,12 +566,13 @@ const AssetRequisitions = () => {
                 </Table>
               </div>
 
-              <DataPagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                totalItems={totalItems}
-                itemsPerPage={itemsPerPage}
-                onPageChange={handlePageChange}
+              <EnhancedPagination
+                currentPage={tableControls.currentPage}
+                totalPages={tableControls.totalPages}
+                totalItems={tableControls.totalItems}
+                itemsPerPage={tableControls.itemsPerPage}
+                onPageChange={tableControls.handlePageChange}
+                onItemsPerPageChange={tableControls.handleItemsPerPageChange}
               />
             </>
           )}

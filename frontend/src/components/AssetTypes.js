@@ -9,16 +9,17 @@ import { Switch } from './ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { DataPagination } from './ui/data-pagination';
+import TableHeaderSortable from './ui/table-header-sortable';
+import AdvancedFilters from './ui/advanced-filters';
+import EnhancedPagination from './ui/enhanced-pagination';
 import ExportButton from './ui/export-button';
+import useTableControls from '../hooks/useTableControls';
 import { toast } from 'sonner';
 import { 
   Plus, 
-  Search, 
   Edit, 
   Trash2, 
-  Package,
-  Filter
+  Package
 } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -27,15 +28,21 @@ const API = `${BACKEND_URL}/api`;
 const AssetTypes = () => {
   const [assetTypes, setAssetTypes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedAssetType, setSelectedAssetType] = useState(null);
-  
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+
+  // Enhanced table controls
+  const tableControls = useTableControls(assetTypes, {
+    initialItemsPerPage: 10,
+    searchFields: ['name', 'code'],
+    sortableFields: {
+      code: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      name: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      status: { sortFn: (a, b, direction) => direction === 'asc' ? a.localeCompare(b) : b.localeCompare(a) },
+      asset_life: { sortFn: (a, b, direction) => direction === 'asc' ? (a || 0) - (b || 0) : (b || 0) - (a || 0) }
+    }
+  });
 
   useEffect(() => {
     fetchAssetTypes();
@@ -91,27 +98,22 @@ const AssetTypes = () => {
     }
   };
 
-  // Filter asset types first
-  const filteredAssetTypes = assetTypes.filter(assetType => {
-    const matchesSearch = assetType.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         assetType.code.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || assetType.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  // Apply pagination to filtered results
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedAssetTypes = filteredAssetTypes.slice(startIndex, endIndex);
-
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-  };
-
-  // Reset to first page when search or filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter]);
+  // Update table controls filters
+  const filters = [
+    {
+      key: 'status',
+      label: 'Status',
+      placeholder: 'Filter by status',
+      width: 'w-[150px]',
+      value: tableControls.filters.status || 'all',
+      defaultValue: 'all',
+      options: [
+        { value: 'all', label: 'All Status' },
+        { value: 'Active', label: 'Active' },
+        { value: 'Inactive', label: 'Inactive' }
+      ]
+    }
+  ];
 
   if (loading) {
     return (
@@ -132,7 +134,7 @@ const AssetTypes = () => {
 
         <div className="flex items-center gap-2">
           <ExportButton 
-            data={filteredAssetTypes}
+            data={tableControls.filteredData}
             type="assetTypes"
             disabled={loading}
           />
@@ -154,55 +156,30 @@ const AssetTypes = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search asset types..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-gray-500" />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Enhanced Filters */}
+      <AdvancedFilters
+        searchTerm={tableControls.searchTerm}
+        onSearchChange={tableControls.handleSearchChange}
+        filters={filters}
+        onFilterChange={tableControls.handleFilterChange}
+        onClearFilters={tableControls.clearFilters}
+        activeFiltersCount={tableControls.activeFiltersCount}
+      />
 
       {/* Asset Types Table */}
       <Card>
         <CardHeader>
-          <div className="flex items-center">
-            <Package className="mr-2 h-5 w-5 text-blue-600" />
-            <CardTitle>Asset Types ({filteredAssetTypes.length})</CardTitle>
-          </div>
+          <CardTitle>Asset Types ({tableControls.totalItems})</CardTitle>
         </CardHeader>
         <CardContent>
-          {filteredAssetTypes.length === 0 ? (
-            <div className="text-center py-12">
+          {tableControls.totalItems === 0 ? (
+            <div className="text-center py-8 text-gray-500">
               <Package className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No asset types found</h3>
+              <h3 className="mt-2 text-sm font-semibold text-gray-900">No asset types found</h3>
               <p className="mt-1 text-sm text-gray-500">
-                {searchTerm || statusFilter !== 'all' 
-                  ? 'Try adjusting your search or filter criteria.' 
-                  : 'Get started by creating your first asset type.'
+                {tableControls.searchTerm || tableControls.activeFiltersCount > 0
+                  ? 'Try adjusting your search or filters.' 
+                  : 'Get started by creating a new asset type.'
                 }
               </p>
             </div>
@@ -212,17 +189,39 @@ const AssetTypes = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Depreciation</TableHead>
-                      <TableHead>Asset Life</TableHead>
-                      <TableHead>Recovery Required</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHeaderSortable
+                        sortKey="code"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Code
+                      </TableHeaderSortable>
+                      <TableHeaderSortable
+                        sortKey="name"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Name
+                      </TableHeaderSortable>
+                      <TableHeaderSortable
+                        sortKey="asset_life"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Asset Life (Months)
+                      </TableHeaderSortable>
+                      <TableHeaderSortable
+                        sortKey="status"
+                        currentSort={tableControls.sortConfig}
+                        onSort={tableControls.handleSort}
+                      >
+                        Status
+                      </TableHeaderSortable>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedAssetTypes.map((assetType) => (
+                    {tableControls.data.map((assetType) => (
                       <TableRow key={assetType.id}>
                         <TableCell className="font-medium">{assetType.code}</TableCell>
                         <TableCell>{assetType.name}</TableCell>
@@ -279,12 +278,13 @@ const AssetTypes = () => {
               </div>
               
               {/* Pagination */}
-              <DataPagination
-                currentPage={currentPage}
-                totalPages={Math.ceil(filteredAssetTypes.length / itemsPerPage)}
-                totalItems={filteredAssetTypes.length}
-                itemsPerPage={itemsPerPage}
-                onPageChange={handlePageChange}
+              <EnhancedPagination
+                currentPage={tableControls.currentPage}
+                totalPages={tableControls.totalPages}
+                totalItems={tableControls.totalItems}
+                itemsPerPage={tableControls.itemsPerPage}
+                onPageChange={tableControls.handlePageChange}
+                onItemsPerPageChange={tableControls.handleItemsPerPageChange}
               />
             </>
           )}

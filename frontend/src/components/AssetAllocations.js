@@ -172,9 +172,12 @@ const AssetAllocations = () => {
       asset_definition_id: '', // This will be selected by the Asset Manager
       request_type: requisition.request_type,
       requested_for: requisition.requested_for,
-      remarks: `Allocated from requisition ${requisition.id}`,
+      requested_for_name: requisition.requested_for_name, // Include employee name
+      remarks: '', // Keep empty as requested
       dispatch_details: '',
-      requisition_id: requisition.id // Add this to link the allocation to the requisition
+      requisition_id: requisition.id, // Add this to link the allocation to the requisition
+      manager_action_by_name: requisition.manager_action_by_name, // Include approver name
+      hr_action_by_name: requisition.hr_action_by_name
     });
     setIsCreateModalOpen(true);
   };
@@ -376,8 +379,8 @@ const AssetAllocations = () => {
                       <TableCell>
                         <div className="flex items-center">
                           <Calendar className="h-4 w-4 text-gray-400 mr-2" />
-                          {requisition.required_by ? 
-                            new Date(requisition.required_by).toLocaleDateString() : 
+                          {requisition.required_by_date ? 
+                            new Date(requisition.required_by_date).toLocaleDateString() : 
                             '-'
                           }
                         </div>
@@ -385,7 +388,7 @@ const AssetAllocations = () => {
                       <TableCell>
                         <div className="flex items-center">
                           <User className="h-4 w-4 text-gray-400 mr-2" />
-                          {requisition.manager_approved_by_name || requisition.hr_approved_by_name || '-'}
+                          {requisition.manager_action_by_name || requisition.hr_action_by_name || '-'}
                         </div>
                       </TableCell>
                       <TableCell>
@@ -496,161 +499,248 @@ const AssetAllocations = () => {
 // Asset Allocation Form Component
 const AssetAllocationForm = ({ assetTypes, assetDefinitions, users, onSubmit, initialData, onClose }) => {
   const [formData, setFormData] = useState({
-    asset_type_id: initialData?.asset_type_id || '',
     asset_definition_id: initialData?.asset_definition_id || '',
-    request_type: initialData?.request_type || 'New Request',
-    requested_for: initialData?.requested_for || '',
-    remarks: initialData?.remarks || '',
+    allocated_date: new Date().toISOString().split('T')[0], // Default to today
     dispatch_details: initialData?.dispatch_details || '',
-    requisition_id: initialData?.requisition_id || null
+    reference_id: '',
+    remarks: '', // Keep empty by default
+    // Read-only fields from requisition
+    requisition_id: initialData?.requisition_id || null,
+    request_type: initialData?.request_type || '',
+    asset_type_id: initialData?.asset_type_id || '',
+    requested_for: initialData?.requested_for || '',
+    requested_for_name: initialData?.requested_for_name || '',
+    approved_by: initialData?.manager_action_by_name || initialData?.hr_action_by_name || ''
   });
   const [loading, setLoading] = useState(false);
   const [filteredAssetDefinitions, setFilteredAssetDefinitions] = useState([]);
+  const [selectedAssetDetails, setSelectedAssetDetails] = useState(null);
 
   // Update form data when initialData changes
   useEffect(() => {
     if (initialData) {
-      setFormData({
-        asset_type_id: initialData.asset_type_id || '',
+      setFormData(prev => ({
+        ...prev,
         asset_definition_id: initialData.asset_definition_id || '',
-        request_type: initialData.request_type || 'New Request',
-        requested_for: initialData.requested_for || '',
-        remarks: initialData.remarks || '',
         dispatch_details: initialData.dispatch_details || '',
-        requisition_id: initialData.requisition_id || null
-      });
+        remarks: '', // Keep empty
+        requisition_id: initialData.requisition_id || null,
+        request_type: initialData.request_type || '',
+        asset_type_id: initialData.asset_type_id || '',
+        requested_for: initialData.requested_for || '',
+        requested_for_name: initialData.requested_for_name || '',
+        approved_by: initialData.manager_action_by_name || initialData.hr_action_by_name || ''
+      }));
     }
   }, [initialData]);
 
   // Filter asset definitions based on selected asset type
   useEffect(() => {
     if (formData.asset_type_id) {
-      const filtered = assetDefinitions.filter(def => def.asset_type_id === formData.asset_type_id);
+      const filtered = assetDefinitions.filter(def => 
+        def.asset_type_id === formData.asset_type_id && 
+        def.status === 'Available'
+      );
       setFilteredAssetDefinitions(filtered);
     } else {
       setFilteredAssetDefinitions([]);
     }
-    // Only reset asset definition selection when asset type changes if it's not from initialData
-    if (!initialData?.asset_definition_id) {
-      setFormData(prev => ({ ...prev, asset_definition_id: '' }));
+  }, [formData.asset_type_id, assetDefinitions]);
+
+  // Update asset details when asset definition is selected
+  useEffect(() => {
+    if (formData.asset_definition_id) {
+      const selectedAsset = assetDefinitions.find(def => def.id === formData.asset_definition_id);
+      setSelectedAssetDetails(selectedAsset);
+    } else {
+      setSelectedAssetDetails(null);
     }
-  }, [formData.asset_type_id, assetDefinitions, initialData]);
+  }, [formData.asset_definition_id, assetDefinitions]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    await onSubmit(formData);
+    
+    // Prepare submission data with only editable fields
+    const submissionData = {
+      asset_definition_id: formData.asset_definition_id,
+      allocated_date: formData.allocated_date,
+      dispatch_details: formData.dispatch_details,
+      reference_id: formData.reference_id,
+      remarks: formData.remarks,
+      // Include read-only fields for backend processing
+      requisition_id: formData.requisition_id,
+      request_type: formData.request_type,
+      requested_for: formData.requested_for
+    };
+    
+    await onSubmit(submissionData);
     setLoading(false);
   };
 
+  // Get requested employee name - use from initialData first, then users array
+  const requestedEmployeeName = formData.requested_for_name || 
+    (users.find(user => user.id === formData.requested_for)?.name) || 
+    'Unknown Employee';
+  
+  // Get asset type name
+  const assetType = assetTypes.find(type => type.id === formData.asset_type_id);
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <Label htmlFor="asset_type_id">Asset Type *</Label>
-        <Select 
-          value={formData.asset_type_id} 
-          onValueChange={(value) => setFormData({ ...formData, asset_type_id: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select asset type" />
-          </SelectTrigger>
-          <SelectContent>
-            {assetTypes.map(type => (
-              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="max-h-[90vh] overflow-y-auto">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Read-only Fields Section - More Compact */}
+        <div className="bg-gray-50 p-3 rounded-lg">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">Requisition Details (Read-only)</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <Label className="text-xs text-gray-600">Requisition ID</Label>
+              <Input 
+                value={formData.requisition_id || 'System Generated'} 
+                disabled 
+                className="bg-gray-100 text-gray-700 h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Request Type</Label>
+              <Input 
+                value={formData.request_type} 
+                disabled 
+                className="bg-gray-100 text-gray-700 h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Asset Type</Label>
+              <Input 
+                value={assetType?.name || 'Unknown'} 
+                disabled 
+                className="bg-gray-100 text-gray-700 h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-600">Requested For</Label>
+              <Input 
+                value={requestedEmployeeName} 
+                disabled 
+                className="bg-gray-100 text-gray-700 h-8 text-sm"
+              />
+            </div>
+            <div className="col-span-2">
+              <Label className="text-xs text-gray-600">Approved By</Label>
+              <Input 
+                value={formData.approved_by || 'Not Available'} 
+                disabled 
+                className="bg-gray-100 text-gray-700 h-8 text-sm"
+              />
+            </div>
+          </div>
+        </div>
 
-      <div>
-        <Label htmlFor="asset_definition_id">Asset *</Label>
-        <Select 
-          value={formData.asset_definition_id} 
-          onValueChange={(value) => setFormData({ ...formData, asset_definition_id: value })}
-          disabled={!formData.asset_type_id}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder={
-              !formData.asset_type_id 
-                ? "Select asset type first" 
-                : filteredAssetDefinitions.length === 0 
-                  ? "No available assets" 
-                  : "Select asset"
-            } />
-          </SelectTrigger>
-          <SelectContent>
-            {filteredAssetDefinitions.map(asset => (
-              <SelectItem key={asset.id} value={asset.id}>
-                {asset.asset_code} - {asset.asset_description}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
-      <div>
-        <Label htmlFor="request_type">Request Type</Label>
-        <Select 
-          value={formData.request_type} 
-          onValueChange={(value) => setFormData({ ...formData, request_type: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select request type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="New Request">New Request</SelectItem>
-            <SelectItem value="Replacement">Replacement</SelectItem>
-            <SelectItem value="Upgrade">Upgrade</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
-      <div>
-        <Label htmlFor="requested_for">Allocate To *</Label>
-        <Select 
-          value={formData.requested_for} 
-          onValueChange={(value) => setFormData({ ...formData, requested_for: value })}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select employee" />
-          </SelectTrigger>
-          <SelectContent>
-            {users.map(user => (
-              <SelectItem key={user.id} value={user.id}>
-                {user.name} ({user.email})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        {/* Editable Fields Section - More Compact */}
+        <div className="bg-green-50 p-3 rounded-lg">
+          <h3 className="text-sm font-semibold text-green-900 mb-2">Asset Manager Input Fields</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <Label htmlFor="asset_definition_id" className="text-xs text-green-800">Asset Definition ID *</Label>
+              <Select 
+                value={formData.asset_definition_id} 
+                onValueChange={(value) => setFormData({ ...formData, asset_definition_id: value })}
+              >
+                <SelectTrigger className="bg-white h-8">
+                  <SelectValue placeholder={
+                    filteredAssetDefinitions.length === 0 
+                      ? "No available assets for this type" 
+                      : "Select asset to allocate"
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {filteredAssetDefinitions.map(asset => (
+                    <SelectItem key={asset.id} value={asset.id}>
+                      {asset.asset_code} - {asset.asset_description}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-      <div>
-        <Label htmlFor="dispatch_details">Dispatch Details</Label>
-        <Input
-          id="dispatch_details"
-          value={formData.dispatch_details}
-          onChange={(e) => setFormData({ ...formData, dispatch_details: e.target.value })}
-          placeholder="Enter dispatch or delivery details"
-        />
-      </div>
+            {/* Asset Description - Shows when asset is selected */}
+            {selectedAssetDetails && (
+              <div className="col-span-2">
+                <Label className="text-xs text-gray-600">Asset Description</Label>
+                <Input 
+                  value={selectedAssetDetails.asset_description} 
+                  disabled 
+                  className="bg-gray-100 text-gray-700 h-8 text-sm"
+                />
+              </div>
+            )}
 
-      <div>
-        <Label htmlFor="remarks">Remarks</Label>
-        <Textarea
-          id="remarks"
-          value={formData.remarks}
-          onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-          placeholder="Enter any additional remarks"
-          rows={3}
-        />
-      </div>
+            <div>
+              <Label htmlFor="allocated_date" className="text-xs text-green-800">Allocated Date *</Label>
+              <Input
+                id="allocated_date"
+                type="date"
+                value={formData.allocated_date}
+                onChange={(e) => setFormData({ ...formData, allocated_date: e.target.value })}
+                className="bg-white h-8"
+                required
+              />
+            </div>
 
-      <div className="flex justify-end gap-2 pt-4">
-        <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-          {loading ? 'Allocating...' : 'Allocate Asset'}
-        </Button>
-      </div>
-    </form>
+            <div>
+              <Label htmlFor="reference_id" className="text-xs text-green-800">Reference ID</Label>
+              <Input
+                id="reference_id"
+                value={formData.reference_id}
+                onChange={(e) => setFormData({ ...formData, reference_id: e.target.value })}
+                placeholder="Invoice, delivery note, etc."
+                className="bg-white h-8 text-sm"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <Label htmlFor="dispatch_details" className="text-xs text-green-800">Dispatch Details</Label>
+              <Textarea
+                id="dispatch_details"
+                value={formData.dispatch_details}
+                onChange={(e) => setFormData({ ...formData, dispatch_details: e.target.value })}
+                placeholder="Enter dispatch or delivery details"
+                rows={2}
+                className="bg-white text-sm"
+              />
+            </div>
+
+            <div className="col-span-2">
+              <Label htmlFor="remarks" className="text-xs text-green-800">Remarks</Label>
+              <Textarea
+                id="remarks"
+                value={formData.remarks}
+                onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                placeholder="Enter any additional remarks"
+                rows={2}
+                className="bg-white text-sm"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Buttons - Always Visible */}
+        <div className="flex justify-end gap-2 pt-2 bg-white sticky bottom-0 border-t border-gray-200 mt-4">
+          <Button type="button" variant="outline" onClick={onClose} className="h-9">
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            disabled={loading || !formData.asset_definition_id} 
+            className="bg-blue-600 hover:bg-blue-700 h-9"
+          >
+            {loading ? 'Allocating...' : 'Allocate Asset'}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 };
 
