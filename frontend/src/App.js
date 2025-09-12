@@ -229,13 +229,11 @@ const AppLayout = ({ children }) => {
 const Home = () => {
   const { user } = useAuth();
   
-  useEffect(() => {
-    if (user) {
-      window.location.pathname = '/dashboard';
-    }
-  }, [user]);
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
-  return <Navigate to="/login" replace />;
+  return <LandingPage />;
 };
 
 function App() {
@@ -246,7 +244,8 @@ function App() {
           <AppLayout>
             <Routes>
               <Route path="/" element={<Home />} />
-              <Route path="/login" element={<LoginPage />} />
+              <Route path="/register" element={<RegisterPage />} />
+              <Route path="/login" element={<NewLoginPage />} />
               <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
               
               <Route 
