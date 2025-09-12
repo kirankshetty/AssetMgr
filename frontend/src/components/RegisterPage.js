@@ -336,21 +336,62 @@ const RegisterPage = () => {
             <PayPalScriptProvider 
               options={{ 
                 "client-id": PAYPAL_CLIENT_ID,
-                currency: "USD"
+                currency: "USD",
+                intent: "capture",
+                "enable-funding": "venmo,paylater",
+                "disable-funding": "",
+                "data-sdk-integration-source": "button-factory"
               }}
             >
-              <PayPalButtons
-                createOrder={createPayPalOrder}
-                onApprove={onPayPalApprove}
-                onError={onPayPalError}
-                disabled={loading}
-                style={{
-                  layout: "vertical",
-                  color: "blue",
-                  shape: "rect",
-                  label: "paypal"
-                }}
-              />
+              <div className="min-h-[200px] p-4 border-2 border-dashed border-gray-200 rounded-lg bg-gray-50">
+                <div className="text-center mb-4">
+                  <h4 className="text-lg font-semibold text-gray-900">Complete Payment</h4>
+                  <p className="text-sm text-gray-600">Choose your preferred payment method</p>
+                </div>
+                
+                <PayPalButtons
+                  createOrder={async (data, actions) => {
+                    try {
+                      const orderId = await createPayPalOrder();
+                      return orderId;
+                    } catch (error) {
+                      console.error('Error creating order:', error);
+                      toast.error('Failed to create payment order');
+                      throw error;
+                    }
+                  }}
+                  onApprove={async (data, actions) => {
+                    try {
+                      await onPayPalApprove(data);
+                    } catch (error) {
+                      console.error('Error approving payment:', error);
+                      toast.error('Payment approval failed');
+                    }
+                  }}
+                  onError={(error) => {
+                    console.error('PayPal error:', error);
+                    toast.error('Payment failed. Please try again.');
+                  }}
+                  onCancel={(data) => {
+                    console.log('Payment cancelled:', data);
+                    toast.info('Payment was cancelled');
+                  }}
+                  style={{
+                    layout: "vertical",
+                    color: "gold",
+                    shape: "rect",
+                    label: "paypal",
+                    height: 55
+                  }}
+                  disabled={loading}
+                />
+                
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-gray-500">
+                    Sandbox Environment - Test payments only
+                  </p>
+                </div>
+              </div>
             </PayPalScriptProvider>
           </div>
         </CardContent>
