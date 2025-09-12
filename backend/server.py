@@ -3718,9 +3718,8 @@ async def reset_asset_system(
 async def create_payment_order(order_data: PaymentOrder):
     """Create PayPal payment order for registration"""
     try:
-        # For this implementation, we'll simulate PayPal order creation
-        # In production, you would integrate with actual PayPal SDK
-        order_id = f"ORDER_{uuid.uuid4().hex[:8].upper()}"
+        # Create a unique order ID that PayPal can use
+        order_id = f"ASSETFLOW_{uuid.uuid4().hex[:12].upper()}"
         
         # Store the order in database for tracking
         order_doc = {
@@ -3730,16 +3729,20 @@ async def create_payment_order(order_data: PaymentOrder):
             "description": order_data.description,
             "user_info": order_data.userInfo.dict(),
             "status": "created",
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "paypal_order_id": None  # Will be updated when PayPal creates the order
         }
         
         await db.payment_orders.insert_one(order_doc)
+        
+        logging.info(f"Created payment order: {order_id} for amount: ${order_data.amount}")
         
         return {
             "success": True,
             "orderID": order_id,
             "amount": order_data.amount,
-            "currency": order_data.currency
+            "currency": order_data.currency,
+            "description": order_data.description
         }
         
     except Exception as e:
