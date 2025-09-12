@@ -630,7 +630,7 @@ class EmailService:
             message.attach(html_part)
             
             # Send email
-            all_recipients = to_emails + (cc_emails or [])
+            all_recipients = to_emails + (cc_emails or []) + (bcc_emails or [])
             
             if config.use_ssl:
                 await aiosmtplib.send(
