@@ -664,7 +664,7 @@ class EmailService:
         html_content = self.get_email_template(notification_type, context)
         text_content = self.get_text_template(notification_type, context)
         
-        await self.send_email(to_emails, cc_emails, subject, html_content, text_content)
+        await self.send_email(to_emails, subject, html_content, text_content, cc_emails)
     
     def get_email_subject(self, notification_type: str, context: Dict[str, Any]) -> str:
         """Get email subject based on notification type"""
