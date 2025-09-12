@@ -605,7 +605,7 @@ class EmailService:
             logging.error(f"DEBUG: Error in get_email_config: {str(e)}")
             return None
     
-    async def send_email(self, to_emails: List[str], cc_emails: List[str], subject: str, html_content: str, text_content: str = None):
+    async def send_email(self, to_emails: List[str], subject: str, html_content: str, text_content: str = None, cc_emails: List[str] = None, bcc_emails: List[str] = None):
         """Send email using SMTP configuration"""
         config = await self.get_email_config()
         if not config:
