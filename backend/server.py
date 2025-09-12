@@ -376,6 +376,35 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
     password: Optional[str] = None
 
+# Registration and Payment models
+class RegistrationData(BaseModel):
+    name: str
+    email: EmailStr
+    mobile: str
+    companyName: str
+    country: str = "US"
+
+class PaymentOrder(BaseModel):
+    amount: float
+    currency: str = "USD"
+    description: str
+    userInfo: RegistrationData
+
+class PaymentCapture(BaseModel):
+    orderID: str
+    userInfo: RegistrationData
+
+class Invoice(BaseModel):
+    id: str
+    customer_name: str
+    customer_email: str
+    company_name: str
+    amount: float
+    currency: str
+    date: datetime
+    description: str
+    order_id: str
+
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str
