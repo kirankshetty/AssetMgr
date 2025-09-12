@@ -207,7 +207,9 @@ const AppLayout = ({ children }) => {
   const { user } = useAuth();
   const location = useLocation();
 
-  if (location.pathname === '/login') {
+  // Public pages that don't need navigation
+  const publicPages = ['/', '/login', '/register'];
+  if (publicPages.includes(location.pathname)) {
     return children;
   }
 
