@@ -27,3 +27,5 @@ openpyxl>=3.1.5
 # Email dependencies
 aiosmtplib>=3.0.0
 jinja2>=3.1.0
+# Password hashing
+bcrypt>=4.0.0
