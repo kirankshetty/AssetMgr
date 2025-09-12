@@ -8159,6 +8159,51 @@ def run_routing_investigation():
     
     return tester.tests_passed == tester.tests_run
 
+def run_paypal_payment_integration_test():
+    """Run focused PayPal Payment Integration test"""
+    print("🚀 STARTING PAYPAL PAYMENT INTEGRATION TEST")
+    print("=" * 60)
+    
+    tester = AssetInventoryAPITester()
+    
+    # Run PayPal integration tests
+    payment_results = tester.test_paypal_payment_integration()
+    
+    # Final Summary
+    print(f"\n🎯 PAYPAL INTEGRATION TEST COMPLETED")
+    print("=" * 50)
+    print(f"📊 Tests Run: {tester.tests_run}")
+    print(f"✅ Tests Passed: {tester.tests_passed}")
+    print(f"❌ Tests Failed: {tester.tests_run - tester.tests_passed}")
+    
+    if tester.tests_run > 0:
+        success_rate = (tester.tests_passed / tester.tests_run) * 100
+        print(f"📈 Success Rate: {success_rate:.1f}%")
+    else:
+        print("📈 Success Rate: 0.0%")
+    
+    # Detailed results
+    total_payment_tests = len(payment_results)
+    passed_payment_tests = sum(payment_results.values())
+    
+    print(f"\n📋 DETAILED RESULTS:")
+    print(f"   Core PayPal Tests: {passed_payment_tests}/{total_payment_tests}")
+    
+    if passed_payment_tests == total_payment_tests:
+        print("🎉 ALL PAYPAL INTEGRATION TESTS PASSED!")
+        print("   ✅ PayPal order creation working")
+        print("   ✅ Response format validation working")
+        print("   ✅ PayPal configuration verified")
+        print("   ✅ Error handling robust")
+        print("   ✅ Database operations functional")
+        print("   🚀 System ready for PayPal integration!")
+    else:
+        print("⚠️ SOME PAYPAL TESTS FAILED - REVIEW REQUIRED")
+        failed_tests = [test for test, result in payment_results.items() if not result]
+        print(f"   Failed tests: {failed_tests}")
+    
+    return tester.tests_passed == tester.tests_run
+
 if __name__ == "__main__":
     # Check if we want to run the focused tests
     import sys
