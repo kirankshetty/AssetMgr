@@ -27,7 +27,7 @@ const API = process.env.REACT_APP_BACKEND_URL
   ? `${process.env.REACT_APP_BACKEND_URL}/api` 
   : 'http://localhost:8001/api';
 
-const PAYPAL_CLIENT_ID = process.env.REACT_APP_PAYPAL_CLIENT_ID || 'test_client_id';
+const PAYPAL_CLIENT_ID = process.env.REACT_APP_PAYPAL_CLIENT_ID || 'AUHKUutCy9GAT_04UAmO_rrWje5m_v_9e9f5jdh-CUioJN0TcIzqq2N9Nx99zvPUCq3h6s_Ib86uw-PI';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
