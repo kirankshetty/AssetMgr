@@ -100,6 +100,8 @@ const RegisterPage = () => {
 
   const createPayPalOrder = async () => {
     try {
+      console.log('Creating PayPal order for:', registrationData);
+      
       const response = await axios.post(`${API}/payments/create-order`, {
         amount: 20.00,
         currency: 'USD',
@@ -107,11 +109,12 @@ const RegisterPage = () => {
         userInfo: registrationData
       });
       
+      console.log('Order created successfully:', response.data);
       setOrderID(response.data.orderID);
       return response.data.orderID;
     } catch (error) {
       console.error('Error creating PayPal order:', error);
-      toast.error('Failed to create payment order');
+      toast.error('Failed to create payment order. Please try again.');
       throw error;
     }
   };
