@@ -639,6 +639,7 @@ class EmailService:
                     port=config.smtp_port,
                     username=config.smtp_username,
                     password=config.smtp_password,
+                    recipients=all_recipients,
                     use_tls=False,
                     start_tls=False
                 )
@@ -649,6 +650,7 @@ class EmailService:
                     port=config.smtp_port,
                     username=config.smtp_username,
                     password=config.smtp_password,
+                    recipients=all_recipients,
                     use_tls=config.use_tls,
                     start_tls=config.use_tls
                 )
