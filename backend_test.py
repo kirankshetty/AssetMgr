@@ -8254,7 +8254,11 @@ if __name__ == "__main__":
         # Run complete email notification workflow test
         result = run_complete_email_workflow_test()
         sys.exit(0 if result else 1)
+    elif len(sys.argv) > 1 and sys.argv[1] == "paypal":
+        # Run PayPal payment integration test
+        result = run_paypal_payment_integration_test()
+        sys.exit(0 if result else 1)
     else:
-        # Run complete email workflow test by default as requested
-        result = run_complete_email_workflow_test()
+        # Run PayPal payment integration test by default as requested
+        result = run_paypal_payment_integration_test()
         sys.exit(0 if result else 1)
