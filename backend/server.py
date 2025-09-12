@@ -17,6 +17,8 @@ import io
 import csv
 from pathlib import Path
 from dotenv import load_dotenv
+import secrets
+import string
 # Email imports
 import aiosmtplib
 from email.mime.text import MIMEText
