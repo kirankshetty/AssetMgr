@@ -1018,6 +1018,71 @@ Asset Management System
 # Initialize email service
 email_service = EmailService()
 
+# Utility function to get nested value from dictionary
+def get_nested_value(obj, path):
+    """Get nested value from dictionary using dot notation."""
+    keys = path.split('.')
+    for key in keys:
+        if isinstance(obj, dict) and key in obj:
+            obj = obj[key]
+        else:
+            return None
+    return obj
+
+# Utility functions for registration and payments
+def generate_random_password(length: int = 12) -> str:
+    """Generate a secure random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    password = ''.join(secrets.choice(alphabet) for _ in range(length))
+    return password
+
+def create_invoice_html(invoice: Invoice) -> str:
+    """Create HTML invoice template."""
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; }}
+            .header {{ background-color: #2563eb; color: white; padding: 20px; text-align: center; }}
+            .invoice-details {{ margin: 20px 0; }}
+            .customer-info {{ background-color: #f8f9fa; padding: 15px; margin: 20px 0; }}
+            .amount {{ font-size: 18px; font-weight: bold; color: #2563eb; }}
+            .footer {{ margin-top: 40px; text-align: center; color: #666; }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>AssetFlow Invoice</h1>
+            <p>Smart Asset Management Platform</p>
+        </div>
+        
+        <div class="invoice-details">
+            <h2>Invoice #{invoice.id}</h2>
+            <p><strong>Date:</strong> {invoice.date.strftime('%B %d, %Y')}</p>
+            <p><strong>Order ID:</strong> {invoice.order_id}</p>
+        </div>
+        
+        <div class="customer-info">
+            <h3>Customer Information</h3>
+            <p><strong>Name:</strong> {invoice.customer_name}</p>
+            <p><strong>Email:</strong> {invoice.customer_email}</p>
+            <p><strong>Company:</strong> {invoice.company_name}</p>
+        </div>
+        
+        <div class="invoice-details">
+            <h3>Service Details</h3>
+            <p><strong>Description:</strong> {invoice.description}</p>
+            <p class="amount"><strong>Amount:</strong> ${invoice.amount:.2f} {invoice.currency}</p>
+        </div>
+        
+        <div class="footer">
+            <p>Thank you for choosing AssetFlow!</p>
+            <p>For support, contact us at support@assetflow.com</p>
+        </div>
+    </body>
+    </html>
+    """
 # Authentication helpers
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
     try:
