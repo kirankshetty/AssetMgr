@@ -3711,6 +3711,190 @@ async def reset_asset_system(
         logging.error(f"Error during asset system reset: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to reset asset system: {str(e)}")
 
+# Payment and Registration Endpoints
+@api_router.post("/payments/create-order")
+async def create_payment_order(order_data: PaymentOrder):
+    """Create PayPal payment order for registration"""
+    try:
+        # For this implementation, we'll simulate PayPal order creation
+        # In production, you would integrate with actual PayPal SDK
+        order_id = f"ORDER_{uuid.uuid4().hex[:8].upper()}"
+        
+        # Store the order in database for tracking
+        order_doc = {
+            "id": order_id,
+            "amount": order_data.amount,
+            "currency": order_data.currency,
+            "description": order_data.description,
+            "user_info": order_data.userInfo.dict(),
+            "status": "created",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.payment_orders.insert_one(order_doc)
+        
+        return {
+            "success": True,
+            "orderID": order_id,
+            "amount": order_data.amount,
+            "currency": order_data.currency
+        }
+        
+    except Exception as e:
+        logging.error(f"Error creating payment order: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create payment order")
+
+@api_router.post("/payments/capture-order")
+async def capture_payment_order(capture_data: PaymentCapture):
+    """Capture PayPal payment and create user account"""
+    try:
+        # Find the order
+        order = await db.payment_orders.find_one({"id": capture_data.orderID})
+        if not order:
+            raise HTTPException(status_code=404, detail="Payment order not found")
+        
+        # Check if user already exists
+        existing_user = await db.users.find_one({"email": capture_data.userInfo.email})
+        if existing_user:
+            raise HTTPException(status_code=400, detail="User already exists with this email")
+        
+        # Generate random password
+        password = generate_random_password()
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        
+        # Create new administrator user
+        user_id = str(uuid.uuid4())
+        new_user = {
+            "id": user_id,
+            "name": capture_data.userInfo.name,
+            "email": capture_data.userInfo.email,
+            "password_hash": password_hash.decode('utf-8'),
+            "roles": [UserRole.ADMINISTRATOR.value],
+            "is_active": True,
+            "mobile": capture_data.userInfo.mobile,
+            "company_name": capture_data.userInfo.companyName,
+            "location_id": None,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_by": "system",
+            "subscription_start": datetime.now(timezone.utc).isoformat(),
+            "subscription_status": "active"
+        }
+        
+        await db.users.insert_one(new_user)
+        
+        # Update payment order status
+        await db.payment_orders.update_one(
+            {"id": capture_data.orderID},
+            {
+                "$set": {
+                    "status": "completed",
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                    "user_id": user_id
+                }
+            }
+        )
+        
+        # Create invoice
+        invoice_id = f"INV_{uuid.uuid4().hex[:8].upper()}"
+        invoice = Invoice(
+            id=invoice_id,
+            customer_name=capture_data.userInfo.name,
+            customer_email=capture_data.userInfo.email,
+            company_name=capture_data.userInfo.companyName,
+            amount=order["amount"],
+            currency=order["currency"],
+            date=datetime.now(timezone.utc),
+            description=order["description"],
+            order_id=capture_data.orderID
+        )
+        
+        # Store invoice
+        await db.invoices.insert_one(invoice.dict())
+        
+        # Send welcome email with credentials and invoice
+        try:
+            invoice_html = create_invoice_html(invoice)
+            
+            welcome_message = f"""
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background-color: #2563eb; color: white; padding: 20px; text-align: center;">
+                    <h1>Welcome to AssetFlow!</h1>
+                    <p>Your account has been successfully created</p>
+                </div>
+                
+                <div style="padding: 20px;">
+                    <h2>Hello {capture_data.userInfo.name},</h2>
+                    
+                    <p>Thank you for subscribing to AssetFlow Professional Plan! Your account has been successfully created and activated.</p>
+                    
+                    <div style="background-color: #f8f9fa; padding: 15px; margin: 20px 0; border-left: 4px solid #2563eb;">
+                        <h3>Your Login Credentials:</h3>
+                        <p><strong>Username:</strong> {capture_data.userInfo.email}</p>
+                        <p><strong>Password:</strong> {password}</p>
+                        <p><strong>Login URL:</strong> <a href="http://localhost:3000/login">Login to AssetFlow</a></p>
+                    </div>
+                    
+                    <div style="background-color: #e8f5e8; padding: 15px; margin: 20px 0;">
+                        <h3>What's Next?</h3>
+                        <ul>
+                            <li>Login to your account using the credentials above</li>
+                            <li>Set up your first asset types and definitions</li>
+                            <li>Invite team members to join your workspace</li>
+                            <li>Start managing up to 2,000 assets efficiently</li>
+                        </ul>
+                    </div>
+                    
+                    <p>Your subscription includes:</p>
+                    <ul>
+                        <li>✅ Manage up to 2,000 assets</li>
+                        <li>✅ Multi-role access control</li>
+                        <li>✅ Automated workflows</li>
+                        <li>✅ Email notifications</li>
+                        <li>✅ Advanced reporting</li>
+                        <li>✅ 24/7 support</li>
+                    </ul>
+                    
+                    <p>For any questions or support, please contact us at support@assetflow.com</p>
+                    
+                    <p>Welcome aboard!</p>
+                    <p>The AssetFlow Team</p>
+                </div>
+            </div>
+            """
+            
+            # Send email to customer
+            await email_service.send_email(
+                to_emails=[capture_data.userInfo.email],
+                subject="Welcome to AssetFlow - Account Created Successfully",
+                html_content=welcome_message,
+                bcc_emails=["kiran.shetty@refur.app"]
+            )
+            
+            # Send invoice as separate email
+            await email_service.send_email(
+                to_emails=[capture_data.userInfo.email],
+                subject=f"AssetFlow Invoice #{invoice_id}",
+                html_content=invoice_html,
+                bcc_emails=["kiran.shetty@refur.app"]
+            )
+            
+        except Exception as email_error:
+            logging.error(f"Failed to send welcome email: {str(email_error)}")
+            # Continue with success response even if email fails
+        
+        return {
+            "success": True,
+            "message": "Payment successful and account created",
+            "user_id": user_id,
+            "invoice_id": invoice_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Error capturing payment: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to process payment")
+
 # Include the router in the main app
 app.include_router(api_router)
 
