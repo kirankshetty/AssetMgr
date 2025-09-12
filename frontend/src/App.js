@@ -6,6 +6,9 @@ import { Toaster, toast } from 'sonner';
 
 // Components
 import LoginPage from './components/LoginPage';
+import LandingPage from './components/LandingPage';
+import RegisterPage from './components/RegisterPage';
+import NewLoginPage from './components/NewLoginPage';
 import Dashboard from './components/Dashboard';
 import AssetTypes from './components/AssetTypes';
 import AssetDefinitions from './components/AssetDefinitions';
